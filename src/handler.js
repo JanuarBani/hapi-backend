@@ -1,22 +1,21 @@
-const { predict } = require('./predictCareerService');
-const { recommendMajor } = require('./predictJurusanService');
+const { predict } = require('./predictService');
+const { recommendMajor } = require('./recommendMajor');
 
 const prediksiJurusanHandler = async (request, h) => {
   try {
+    // eslint-disable-next-line camelcase
     const { scores, test_type } = request.payload;
 
-    // Validasi test_type
-    if (!test_type || (test_type !== 'science' && test_type !== 'humanities')) {
+    // eslint-disable-next-line camelcase
+    if (!test_type || !['science', 'humanities'].includes(test_type)) {
       return h
         .response({
           error: true,
-          message:
-            'test_type harus diisi dan bernilai "science" atau "humanities"',
+          message: 'test_type harus "science" atau "humanities"',
         })
         .code(400);
     }
 
-    // Validasi scores harus objek
     if (!scores || typeof scores !== 'object') {
       return h
         .response({
@@ -26,8 +25,8 @@ const prediksiJurusanHandler = async (request, h) => {
         .code(400);
     }
 
-    // Daftar fitur yang diharapkan sesuai test_type
     const expectedKeys =
+      // eslint-disable-next-line camelcase
       test_type === 'science'
         ? [
           'score_kpu',
@@ -51,9 +50,8 @@ const prediksiJurusanHandler = async (request, h) => {
           'score_eko',
         ];
 
-    // Cek semua expected keys ada di scores
-    const hasAllKeys = expectedKeys.every((key) => key in scores);
-    if (!hasAllKeys) {
+    const missing = expectedKeys.filter((k) => !(k in scores));
+    if (missing.length > 0) {
       return h
         .response({
           error: true,
@@ -64,48 +62,38 @@ const prediksiJurusanHandler = async (request, h) => {
         .code(400);
     }
 
-    // Buat array input dari scores sesuai expectedKeys
-    const input = expectedKeys.map((key) => scores[key]);
-
-    // Validasi semua skor adalah angka valid (number dan bukan NaN)
-    const allNumbers = input.every(
-      (val) => typeof val === 'number' && !isNaN(val)
-    );
-    if (!allNumbers) {
+    const inputArray = expectedKeys.map((k) => scores[k]);
+    if (!inputArray.every((val) => typeof val === 'number' && !isNaN(val))) {
       return h
         .response({
           error: true,
-          message: 'Semua nilai skor harus berupa angka yang valid',
+          message: 'Semua nilai skor harus berupa angka valid',
         })
         .code(400);
     }
 
-    // Validasi nilai dalam range 0-1000 (bisa sesuaikan)
-    const inRange = input.every((val) => val >= 0 && val <= 1000);
-    if (!inRange) {
+    if (!inputArray.every((val) => val >= 0 && val <= 1000)) {
       return h
         .response({
           error: true,
-          message: 'Semua nilai skor harus berada di antara 0 dan 1000',
+          message: 'Semua nilai skor harus antara 0 dan 1000',
         })
         .code(400);
     }
 
-    // Panggil fungsi rekomendasi jurusan dengan input valid
-    const result = await recommendMajor(input);
-
-    // Prediksi index nilai terbesar
-    const predictedIndex = result.indexOf(Math.max(...result));
+    // eslint-disable-next-line camelcase
+    const result = await recommendMajor({ test_type, scores });
+    console.log('🔥 Hasil dari FastAPI:', result);
 
     return h
       .response({
         error: false,
-        prediction: result,
-        topPredictionIndex: predictedIndex,
+        recommendations: result.recommendations, // Jamak, sesuai FastAPI
+        confidence: result.confidence,
       })
       .code(200);
   } catch (err) {
-    console.error('Prediction Error:', err);
+    console.error('❌ Error saat prediksi:', err);
     return h
       .response({
         error: true,
@@ -117,39 +105,69 @@ const prediksiJurusanHandler = async (request, h) => {
 
 const prediksiCareerHandler = async (request, h) => {
   try {
-    const { input } = request.payload;
+    const inputData = request.payload;
 
-    // Validasi input harus array 16 angka
-    if (!input || !Array.isArray(input) || input.length !== 16) {
+    if (!inputData || typeof inputData !== 'object') {
       return h
         .response({
           error: true,
-          message: 'Input harus berupa array dengan 16 angka sesuai fitur',
+          message: 'Input harus berupa objek JSON',
         })
         .code(400);
     }
 
-    const isValid = input.every(
-      (val) => typeof val === 'number' && !isNaN(val)
+    const expectedKeys = [
+      'Linguistic',
+      'Musical',
+      'Bodily',
+      'Logical - Mathematical',
+      'Spatial-Visualization',
+      'Interpersonal',
+      'Intrapersonal',
+      'Naturalist',
+      'math_score',
+      'physics_score',
+      'biology_score',
+      'english_score',
+      'history_score',
+      'chemistry_score',
+      'geography_score',
+      'weekly_self_study_hours',
+      'absence_days',
+    ];
+
+    // Validasi jumlah dan nama key
+    const missing = expectedKeys.filter((key) => !(key in inputData));
+    if (missing.length > 0) {
+      return h
+        .response({
+          error: true,
+          message: `Fitur berikut tidak ditemukan: ${missing.join(', ')}`,
+        })
+        .code(400);
+    }
+
+    const allNumbers = expectedKeys.every(
+      (key) => typeof inputData[key] === 'number' && !isNaN(inputData[key])
     );
-    if (!isValid) {
+
+    if (!allNumbers) {
       return h
         .response({
           error: true,
-          message: 'Semua elemen input harus berupa angka',
+          message: 'Semua nilai fitur harus berupa angka valid',
         })
         .code(400);
     }
 
-    const result = await predict(input);
-
-    const predictedIndex = result.indexOf(Math.max(...result));
+    const result = await predict(inputData);
 
     return h
       .response({
         error: false,
-        prediction: result,
-        topPredictionIndex: predictedIndex,
+        // eslint-disable-next-line camelcase
+        predicted_job: result.predicted_job,
+        confidence: result.confidence,
       })
       .code(200);
   } catch (err) {
