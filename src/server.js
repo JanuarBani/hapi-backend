@@ -9,7 +9,7 @@ const init = async () => {
     host: 'localhost',
     routes: {
       cors: {
-        origin: ['https://nexa-path.vercel.app/'],
+        origin: ['https://nexa-path.vercel.app'],
         credentials: true, // ✅ Dukung cookies/credentials
         headers: ['Accept', 'Content-Type', 'Authorization'], // ✅ Header yang diizinkan
         exposedHeaders: ['Accept', 'Content-Type', 'Authorization'], // ✅ Opsional
